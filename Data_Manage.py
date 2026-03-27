@@ -22,13 +22,22 @@ class PreprocesamientoAgua:
         return df
 
     def _limpiar_resultados(self, df):
+        serie = df["RESULTADO"].astype(str).str.strip()
 
-        df["RESULTADO"] = df["RESULTADO"].astype(str)
+        # Para datos censurados tipo <x, se usa x/2 como aproximacion comun en analisis ambiental.
+        es_menor_que = serie.str.startswith("<")
 
-        df["RESULTADO"] = df["RESULTADO"].str.replace("<", "", regex=False)
-        df["RESULTADO"] = df["RESULTADO"].str.replace(">", "", regex=False)
+        serie = serie.str.replace("<", "", regex=False)
+        serie = serie.str.replace(">", "", regex=False)
+        serie = serie.str.replace(r"(?<=\d),(?=\d{3}(?:\D|$))", "", regex=True)
+        serie = serie.str.replace(",", ".", regex=False)
 
-        df["RESULTADO"] = pd.to_numeric(df["RESULTADO"], errors="coerce")
+        valores = pd.to_numeric(serie, errors="coerce")
+        valores.loc[es_menor_que & valores.notna()] = (
+            valores.loc[es_menor_que & valores.notna()] * 0.5
+        )
+        valores = valores.where(valores >= 0)
+        df["RESULTADO"] = valores
 
         fecha_raw = df["FECHA"].astype(str)
 
@@ -46,6 +55,41 @@ class PreprocesamientoAgua:
             )
 
         return df
+
+    def _es_target_dqo(self, target_col: str) -> bool:
+        target_simple = self._simplificar_texto(target_col)
+        return "DEMANDA QUIMICA DE OXIGENO" in target_simple or target_simple == "DQO"
+
+    @staticmethod
+    def _recortar_outliers_iqr(serie: pd.Series, factor: float = 1.5) -> pd.Series:
+        q1 = serie.quantile(0.25)
+        q3 = serie.quantile(0.75)
+        iqr = q3 - q1
+        if pd.isna(iqr) or iqr <= 0:
+            return serie
+        limite_inf = q1 - factor * iqr
+        limite_sup = q3 + factor * iqr
+        return serie.clip(lower=limite_inf, upper=limite_sup)
+
+    def _limpiar_target_dqo(self, df_model: pd.DataFrame, target_col: str) -> pd.DataFrame:
+        if not self._es_target_dqo(target_col):
+            return df_model
+
+        df_limpio = df_model.copy()
+
+        df_limpio[target_col] = df_limpio.groupby(
+            "NOMBRE DEL PUNTO DE MONITOREO",
+            group_keys=False,
+        )[target_col].apply(lambda s: self._recortar_outliers_iqr(s, factor=1.5))
+
+        q_inf = df_limpio[target_col].quantile(0.01)
+        q_sup = df_limpio[target_col].quantile(0.99)
+        if pd.notna(q_inf) and pd.notna(q_sup) and q_inf < q_sup:
+            df_limpio = df_limpio[
+                (df_limpio[target_col] >= q_inf) & (df_limpio[target_col] <= q_sup)
+            ].copy()
+
+        return df_limpio
 
     def _pivot_vertical(self, df):
 
@@ -172,54 +216,10 @@ class PreprocesamientoAgua:
         df_model[target_col] = pd.to_numeric(df_model[target_col], errors="coerce")
 
         df_model = df_model.dropna(subset=[target_col]).copy()
+        df_model = self._limpiar_target_dqo(df_model, target_col)
         df_model[feature_cols] = df_model[feature_cols].fillna(0)
 
         return df_model, feature_cols, target_col
-
-    def _crear_secuencias_por_punto(self, df_model, feature_cols, target_col):
-
-        X_train_list, X_test_list = [], []
-        y_train_list, y_test_list = [], []
-
-        for _, grupo in df_model.groupby("NOMBRE DEL PUNTO DE MONITOREO"):
-            grupo = grupo.sort_values("FECHA")
-            X_g = grupo[feature_cols].to_numpy(dtype=float)
-            y_g = grupo[target_col].to_numpy(dtype=float)
-
-            if len(X_g) <= self.sequence_length:
-                continue
-
-            X_seq, y_seq = [], []
-            for i in range(len(X_g) - self.sequence_length):
-                X_seq.append(X_g[i:i + self.sequence_length])
-                y_seq.append(y_g[i + self.sequence_length])
-
-            X_seq = np.array(X_seq)
-            y_seq = np.array(y_seq)
-
-            if len(X_seq) < 3:
-                continue
-
-            split = int(len(X_seq) * 0.8)
-            if split < 1 or split >= len(X_seq):
-                continue
-
-            X_train_list.append(X_seq[:split])
-            y_train_list.append(y_seq[:split])
-            X_test_list.append(X_seq[split:])
-            y_test_list.append(y_seq[split:])
-
-        if not X_train_list or not X_test_list:
-            raise ValueError(
-                "No hay secuencias suficientes por punto de monitoreo para entrenar/probar."
-            )
-
-        X_train = np.concatenate(X_train_list, axis=0)
-        y_train = np.concatenate(y_train_list, axis=0)
-        X_test = np.concatenate(X_test_list, axis=0)
-        y_test = np.concatenate(y_test_list, axis=0)
-
-        return X_train, X_test, y_train, y_test
 
     def _escalar_train_test(self, X_train, X_test, y_train, y_test):
 
@@ -238,28 +238,98 @@ class PreprocesamientoAgua:
 
         return X_train_scaled, X_test_scaled, y_train_scaled, y_test_scaled
 
+    def _crear_secuencias(self, X, y, sequence_length):
+        if len(X) <= sequence_length:
+            return np.array([]), np.array([])
+
+        X_seq, y_seq = [], []
+        for i in range(len(X) - sequence_length):
+            X_seq.append(X[i:i + sequence_length])
+            y_seq.append(y[i + sequence_length])
+
+        return np.array(X_seq), np.array(y_seq)
+
+    def _dividir_train_test(self, X, y, train_ratio=0.8):
+        split = int(len(X) * train_ratio)
+        if split < 1 or split >= len(X):
+            raise ValueError("No hay datos suficientes para hacer el split.")
+        return X[:split], X[split:], y[:split], y[split:]
+
+    def obtener_dataset_tabular(self):
+        df = self._cargar_datos()
+        df = self._limpiar_resultados(df)
+        df_wide = self._pivot_vertical(df)
+        df_wide = self._crear_variables_contextuales(df_wide, df)
+        df_wide = self._manejar_nan(df_wide)
+        df_model, feature_cols, target_col = self._preparar_features(df_wide)
+        return df_model, feature_cols, target_col
+
+    def preparar_datos_supervisado(self, train_ratio=0.8, escalar=True):
+        df_model, feature_cols, target_col = self.obtener_dataset_tabular()
+
+        X = df_model[feature_cols].to_numpy(dtype=float)
+        y = df_model[target_col].to_numpy(dtype=float)
+        X_train, X_test, y_train, y_test = self._dividir_train_test(
+            X,
+            y,
+            train_ratio=train_ratio,
+        )
+
+        if not escalar:
+            return X_train, X_test, y_train, y_test
+
+        self.scaler.fit(X_train)
+        X_train_scaled = self.scaler.transform(X_train)
+        X_test_scaled = self.scaler.transform(X_test)
+        y_train_scaled = self.target_scaler.fit_transform(y_train.reshape(-1, 1)).ravel()
+        y_test_scaled = self.target_scaler.transform(y_test.reshape(-1, 1)).ravel()
+        return X_train_scaled, X_test_scaled, y_train_scaled, y_test_scaled
+
+    def preparar_datos_secuenciales(self, sequence_length=None, train_ratio=0.8, escalar=True):
+        seq_len = sequence_length if sequence_length is not None else self.sequence_length
+        df_model, feature_cols, target_col = self.obtener_dataset_tabular()
+
+        X_train_list, X_test_list = [], []
+        y_train_list, y_test_list = [], []
+
+        for _, grupo in df_model.groupby("NOMBRE DEL PUNTO DE MONITOREO"):
+            grupo = grupo.sort_values("FECHA")
+            X_g = grupo[feature_cols].to_numpy(dtype=float)
+            y_g = grupo[target_col].to_numpy(dtype=float)
+
+            X_seq, y_seq = self._crear_secuencias(X_g, y_g, seq_len)
+            if len(X_seq) < 3:
+                continue
+
+            X_train_g, X_test_g, y_train_g, y_test_g = self._dividir_train_test(
+                X_seq,
+                y_seq,
+                train_ratio=train_ratio,
+            )
+
+            X_train_list.append(X_train_g)
+            X_test_list.append(X_test_g)
+            y_train_list.append(y_train_g)
+            y_test_list.append(y_test_g)
+
+        if not X_train_list or not X_test_list:
+            raise ValueError(
+                "No hay secuencias suficientes por punto de monitoreo."
+            )
+
+        X_train = np.concatenate(X_train_list, axis=0)
+        X_test = np.concatenate(X_test_list, axis=0)
+        y_train = np.concatenate(y_train_list, axis=0)
+        y_test = np.concatenate(y_test_list, axis=0)
+
+        if not escalar:
+            return X_train, X_test, y_train, y_test
+
+        return self._escalar_train_test(X_train, X_test, y_train, y_test)
+
     def desescalar_target(self, y):
         y = np.asarray(y).reshape(-1, 1)
         return self.target_scaler.inverse_transform(y).ravel()
 
     def procesar(self):
-
-        df = self._cargar_datos()
-
-        df = self._limpiar_resultados(df)
-
-        df_wide = self._pivot_vertical(df)
-
-        df_wide = self._crear_variables_contextuales(df_wide, df)
-
-        df_wide = self._manejar_nan(df_wide)
-
-        df_model, feature_cols, target_col = self._preparar_features(df_wide)
-
-        X_train, X_test, y_train, y_test = self._crear_secuencias_por_punto(
-            df_model,
-            feature_cols,
-            target_col,
-        )
-
-        return self._escalar_train_test(X_train, X_test, y_train, y_test)
+        return self.obtener_dataset_tabular()

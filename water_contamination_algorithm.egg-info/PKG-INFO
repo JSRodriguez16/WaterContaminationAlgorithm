@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: water-contamination-algorithm
+Version: 0.1.0
+Summary: Water quality contamination diagnosis and forecasting algorithms
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: tensorflow==2.16.1
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: scikit-learn
+Requires-Dist: matplotlib
+
+# WaterContaminationAlgorithm
