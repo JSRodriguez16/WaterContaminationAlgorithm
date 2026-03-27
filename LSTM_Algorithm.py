@@ -5,7 +5,7 @@ import tensorflow as tf
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
-from Data_Manage import PreprocesamientoAgua
+from Data_Manage import Data_Manage
 
 
 class LSTM_Algorithm:
@@ -16,7 +16,8 @@ class LSTM_Algorithm:
         self.sequence_length = sequence_length
         self.train_ratio = train_ratio
         self.model = None
-        self.preprocesador = None
+        self.datos_preprocesados = None
+        self.gestor_datos = None
 
     def _construir_modelo(self, input_shape):
         model = tf.keras.Sequential(
@@ -32,7 +33,7 @@ class LSTM_Algorithm:
                     bias_initializer="zeros",
                     unit_forget_bias=True,
                     dropout=0.2,
-                    recurrent_dropout=0.0,
+                    recurrent_dropout=0.1,
                     return_sequences=True,
                 ),
                 tf.keras.layers.LSTM(
@@ -45,7 +46,7 @@ class LSTM_Algorithm:
                     bias_initializer="zeros",
                     unit_forget_bias=True,
                     dropout=0.2,
-                    recurrent_dropout=0.0,
+                    recurrent_dropout=0.1,
                     return_sequences=False,
                 ),
                 tf.keras.layers.Dense(16, activation="relu"),
@@ -98,17 +99,20 @@ class LSTM_Algorithm:
 
     def _preparar_datos(self):
         archivo_resuelto = self._resolver_archivo()
-        pre = PreprocesamientoAgua(
+        gestor = Data_Manage(
             archivo_resuelto,
             self.target,
             sequence_length=self.sequence_length,
         )
-        self.preprocesador = pre
-        return pre.preparar_datos_secuenciales(
+        datos = gestor.preparar_datos_secuenciales(
             sequence_length=self.sequence_length,
             train_ratio=self.train_ratio,
             escalar=True,
         )
+        self.gestor_datos = gestor
+        self.datos_preprocesados = datos
+        return datos
+        
 
     def _entrenar(
         self, X_train, y_train, epochs=60, batch_size=32, validation_split=0.2
@@ -148,9 +152,9 @@ class LSTM_Algorithm:
 
         y_pred_scaled = self._predecir(X_test)
 
-        if self.preprocesador is not None:
-            y_pred = self.preprocesador.desescalar_target(y_pred_scaled)
-            y_test_real = self.preprocesador.desescalar_target(y_test)
+        if self.gestor_datos is not None:
+            y_pred = self.gestor_datos.desescalar_target(y_pred_scaled)
+            y_test_real = self.gestor_datos.desescalar_target(y_test)
         else:
             y_pred = y_pred_scaled
             y_test_real = y_test
