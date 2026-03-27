@@ -1,5 +1,10 @@
+from statistics import linear_regression
+
 from LSTM_Algorithm import LSTM_Algorithm
+from LinearRegression_Algorithm import LinearRegression_Algorithm
 from XGBoost_Algorithm import XGBoost_Algorithm
+
+# Funciones de visualización de resultados
 
 def mostrar_resultados(nombre_modelo: str, resultados: dict) -> None:
     print(f"\nResultados del Modelo {nombre_modelo}")
@@ -13,7 +18,6 @@ def mostrar_resultados(nombre_modelo: str, resultados: dict) -> None:
     print(f"RMSE (Raíz del error cuadrático): {resultados['rmse']:.4f}")
     print(f"R Cuadrado (Coeficiente de determinación): {resultados['r2']:.4f}")
     print("-" * 50)
-
 
 if __name__ == "__main__":
     archivo_datos = "Data_historica_de_calidad_de_agua_20260223.csv"
@@ -30,3 +34,6 @@ if __name__ == "__main__":
     xgb = XGBoost_Algorithm(archivo_datos, variable_objetivo)
     resultados_xgb = xgb.ejecutar()
     mostrar_resultados("XGBoost", resultados_xgb)
+    regresion_lineal = LinearRegression_Algorithm(archivo_datos, variable_objetivo)
+    resultados = regresion_lineal.ejecutar()
+    mostrar_resultados("Regresion lineal", resultados)
