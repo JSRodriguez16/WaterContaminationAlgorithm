@@ -10,7 +10,7 @@ from Data_Manage import Data_Manage
 
 class LSTM_Algorithm:
 
-    def __init__(self, archivo_csv, target, sequence_length=5, train_ratio=0.8):
+    def __init__(self, archivo_csv, target, sequence_length=8, train_ratio=0.8):
         self.archivo = archivo_csv
         self.target = target
         self.sequence_length = sequence_length
@@ -24,7 +24,7 @@ class LSTM_Algorithm:
             [
                 tf.keras.Input(shape=input_shape),
                 tf.keras.layers.LSTM(
-                    units=128,
+                    units=160,
                     activation="tanh",
                     recurrent_activation="sigmoid",
                     use_bias=True,
@@ -32,12 +32,13 @@ class LSTM_Algorithm:
                     recurrent_initializer="orthogonal",
                     bias_initializer="zeros",
                     unit_forget_bias=True,
-                    dropout=0.2,
+                    dropout=0.15,
                     recurrent_dropout=0.1,
                     return_sequences=True,
                 ),
+                tf.keras.layers.LayerNormalization(),
                 tf.keras.layers.LSTM(
-                    units=64,
+                    units=96,
                     activation="tanh",
                     recurrent_activation="sigmoid",
                     use_bias=True,
@@ -45,16 +46,17 @@ class LSTM_Algorithm:
                     recurrent_initializer="orthogonal",
                     bias_initializer="zeros",
                     unit_forget_bias=True,
-                    dropout=0.2,
+                    dropout=0.15,
                     recurrent_dropout=0.1,
                     return_sequences=False,
                 ),
-                tf.keras.layers.Dense(16, activation="relu"),
+                tf.keras.layers.Dense(32, activation="relu"),
+                tf.keras.layers.Dropout(0.1),
                 tf.keras.layers.Dense(1),
             ]
         )
-        optimizer = tf.keras.optimizers.Adam(learning_rate=3e-4)
-        model.compile(optimizer=optimizer, loss="mse", metrics=["mae"])
+        optimizer = tf.keras.optimizers.Adam(learning_rate=2e-4)
+        model.compile(optimizer=optimizer, loss=tf.keras.losses.Huber(), metrics=["mae"])
         return model
 
     @staticmethod
@@ -103,25 +105,31 @@ class LSTM_Algorithm:
             archivo_resuelto,
             self.target,
             sequence_length=self.sequence_length,
+            coverage_threshold_tabular=0.7,
+            split_estrategia="aleatorio",
         )
-        datos = gestor.preparar_datos_secuenciales(
-            sequence_length=self.sequence_length,
+        X_train_2d, X_test_2d, y_train, y_test = gestor.preparar_datos_supervisado(
             train_ratio=self.train_ratio,
             escalar=True,
         )
+
+        # Mantiene LSTM como modelo, pero usando un solo paso temporal con features tabulares enriquecidos.
+        X_train = X_train_2d.reshape(X_train_2d.shape[0], 1, X_train_2d.shape[1])
+        X_test = X_test_2d.reshape(X_test_2d.shape[0], 1, X_test_2d.shape[1])
+        datos = (X_train, X_test, y_train, y_test)
         self.gestor_datos = gestor
         self.datos_preprocesados = datos
         return datos
         
 
     def _entrenar(
-        self, X_train, y_train, epochs=60, batch_size=32, validation_split=0.2
+        self, X_train, y_train, epochs=80, batch_size=32, validation_split=0.15
     ):
         if self.model is None:
             self.model = self._construir_modelo((X_train.shape[1], X_train.shape[2]))
         early_stopping = EarlyStopping(
             monitor="val_loss",
-            patience=10,
+            patience=14,
             min_delta=1e-4,
             restore_best_weights=True,
         )

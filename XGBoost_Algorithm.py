@@ -14,13 +14,19 @@ class XGBoost_Algorithm:
         self.target = target
         self.preprocesador = None
         
-        # Instanciamos el modelo aquí para evitar advertencias del linter
         self.model = XGBRegressor(
-            n_estimators=100,
-            learning_rate=0.1,
-            max_depth=5,
+            n_estimators=700,
+            learning_rate=0.03,
+            max_depth=7,
+            min_child_weight=3,
+            subsample=0.85,
+            colsample_bytree=0.85,
+            reg_alpha=0.05,
+            reg_lambda=1.2,
             random_state=42,
-            objective='reg:squarederror'
+            objective='reg:squarederror',
+            tree_method='hist',
+            n_jobs=-1,
         )
 
     @staticmethod
@@ -60,25 +66,17 @@ class XGBoost_Algorithm:
     def _preparar_datos(self):
         archivo_resuelto = self._resolver_archivo()
         
-        # Instanciamos usando la nueva clase Data_Manage
-        pre = Data_Manage(archivo_resuelto, self.target)
+        pre = Data_Manage(
+            archivo_resuelto,
+            self.target,
+            split_estrategia="aleatorio",
+        )
         self.preprocesador = pre
-        
-        # Usamos el método correcto que devuelve los arreglos 3D escalados
-        X_train_3d, X_test_3d, y_train, y_test = pre.preparar_datos_secuenciales()
 
-        # TRANSFORMACIÓN CLAVE: Aplanar 3D a 2D para XGBoost
-        # X_train_3d tiene la forma (muestras, pasos_tiempo, variables)
-        n_samples_train, n_steps, n_features = X_train_3d.shape
-        X_train_2d = X_train_3d.reshape(n_samples_train, n_steps * n_features)
-
-        n_samples_test = X_test_3d.shape[0]
-        X_test_2d = X_test_3d.reshape(n_samples_test, n_steps * n_features)
-
-        return X_train_2d, X_test_2d, y_train, y_test
+        # Para boosting, la vista tabular con lags y rolling suele rendir mejor que aplanar secuencias.
+        return pre.preparar_datos_supervisado(train_ratio=0.8, escalar=True)
 
     def _entrenar(self, X_train, y_train):
-        # Como el modelo ya está instanciado en el __init__, solo llamamos fit
         self.model.fit(X_train, y_train)
 
     def _predecir(self, X):
@@ -92,7 +90,6 @@ class XGBoost_Algorithm:
         y_pred_scaled = self._predecir(X_test)
 
         if self.preprocesador is not None:
-            # Usamos el método desescalar_target de Data_Manage
             y_pred = self.preprocesador.desescalar_target(y_pred_scaled)
             y_test_real = self.preprocesador.desescalar_target(y_test)
         else:

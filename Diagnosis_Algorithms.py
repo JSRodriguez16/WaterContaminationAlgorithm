@@ -1,10 +1,7 @@
-from statistics import linear_regression
-
 from LSTM_Algorithm import LSTM_Algorithm
 from LinearRegression_Algorithm import LinearRegression_Algorithm
 from XGBoost_Algorithm import XGBoost_Algorithm
 
-# Funciones de visualización de resultados
 
 def mostrar_resultados(nombre_modelo: str, resultados: dict) -> None:
     print(f"\nResultados del Modelo {nombre_modelo}")
@@ -23,13 +20,11 @@ if __name__ == "__main__":
     archivo_datos = "Data_historica_de_calidad_de_agua_20260223.csv"
     variable_objetivo = "DEMANDA QUIMICA DE OXIGENO"
 
-    # --- 1. Ejecución de LSTM ---
     print("\nIniciando entrenamiento de LSTM...")
     lstm = LSTM_Algorithm(archivo_datos, variable_objetivo)
-    resultados_lstm = lstm.ejecutar(epochs=30, batch_size=32)
+    resultados_lstm = lstm.ejecutar(epochs=80, batch_size=32)
     mostrar_resultados("LSTM", resultados_lstm)
 
-    # --- 2. Ejecución de XGBoost ---
     print("\nIniciando entrenamiento de XGBoost...")
     xgb = XGBoost_Algorithm(archivo_datos, variable_objetivo)
     resultados_xgb = xgb.ejecutar()
