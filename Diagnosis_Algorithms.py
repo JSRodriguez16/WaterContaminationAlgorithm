@@ -11,8 +11,11 @@ def mostrar_resultados(nombre_modelo: str, resultados: dict) -> None:
     print("-" * 50)
     print("Precisión del Modelo")
     print("-" * 50)
-    print(f"MAE (Error absoluto medio): {resultados['mae']:.4f}")
-    print(f"RMSE (Raíz del error cuadrático): {resultados['rmse']:.4f}")
+    if "mae_train" in resultados and "rmse_train" in resultados:
+        print(f"MAE entrenamiento: {resultados['mae_train']:.4f}")
+        print(f"RMSE entrenamiento: {resultados['rmse_train']:.4f}")
+    print(f"MAE prueba: {resultados['mae']:.4f}")
+    print(f"RMSE prueba: {resultados['rmse']:.4f}")
     print(f"R Cuadrado (Coeficiente de determinación): {resultados['r2']:.4f}")
     print("-" * 50)
 

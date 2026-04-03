@@ -2,7 +2,7 @@ import unicodedata
 from pathlib import Path
 
 import numpy as np
-from sklearn.linear_model import RidgeCV
+from sklearn.linear_model import LassoCV
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 from Data_Manage import Data_Manage
@@ -14,7 +14,7 @@ class LinearRegression_Algorithm:
         self.target = target
         self.train_ratio = train_ratio
 
-        self.model: RidgeCV | None = None
+        self.model: LassoCV | None = None
         self.datos_preprocesados: tuple | None = None
         self.gestor_datos: Data_Manage | None = None
         self.feature_cols: list[str] = []
@@ -80,10 +80,11 @@ class LinearRegression_Algorithm:
         self.datos_preprocesados = datos
         return datos
 
-    def _construir_modelo(self) -> RidgeCV:
-        return RidgeCV(
-            alphas=np.logspace(-3, 3, 13),
-            fit_intercept=True,
+    def _construir_modelo(self) -> LassoCV:
+        return LassoCV(
+            alphas=np.logspace(-5, 1, 20),
+            max_iter=40000,
+            random_state=42,
         )
 
     def _entrenar(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
@@ -106,7 +107,7 @@ class LinearRegression_Algorithm:
         }
         return {
             "intercepto": round(float(self.model.intercept_), 6),
-            "alpha": round(float(self.model.alpha_), 6),
+            "alpha": round(float(self.model.alpha_), 8),
             "coeficientes": coefs,
         }
 
@@ -115,15 +116,22 @@ class LinearRegression_Algorithm:
 
         self._entrenar(X_train, y_train)
 
+        y_pred_train_scaled = self._predecir(X_train)
         y_pred_scaled = self._predecir(X_test)
 
         if self.gestor_datos is not None:
+            y_pred_train = self.gestor_datos.desescalar_target(y_pred_train_scaled)
+            y_train_real = self.gestor_datos.desescalar_target(y_train)
             y_pred = self.gestor_datos.desescalar_target(y_pred_scaled)
             y_test_real = self.gestor_datos.desescalar_target(y_test)
         else:
+            y_pred_train = y_pred_train_scaled
+            y_train_real = y_train
             y_pred = y_pred_scaled
             y_test_real = y_test
 
+        mae_train = mean_absolute_error(y_train_real, y_pred_train)
+        rmse_train = float(np.sqrt(mean_squared_error(y_train_real, y_pred_train)))
         mae = mean_absolute_error(y_test_real, y_pred)
         rmse = float(np.sqrt(mean_squared_error(y_test_real, y_pred)))
         r2 = r2_score(y_test_real, y_pred)
@@ -131,6 +139,8 @@ class LinearRegression_Algorithm:
         return {
             "n_train": len(X_train),
             "n_test": len(X_test),
+            "mae_train": mae_train,
+            "rmse_train": rmse_train,
             "y_test": y_test_real,
             "y_pred": y_pred,
             "mae": mae,
