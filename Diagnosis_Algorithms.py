@@ -17,6 +17,20 @@ def mostrar_resultados(nombre_modelo: str, resultados: dict) -> None:
     print(f"MAE prueba: {resultados['mae']:.4f}")
     print(f"RMSE prueba: {resultados['rmse']:.4f}")
     print(f"R Cuadrado (Coeficiente de determinación): {resultados['r2']:.4f}")
+    if "p_factor" in resultados and "r_factor" in resultados:
+        print("-" * 50)
+        print("Análisis de Incertidumbre")
+        print("-" * 50)
+        print(f"P-factor (cobertura): {resultados['p_factor']:.4f}")
+        print(f"R-factor (ancho relativo): {resultados['r_factor']:.4f}")
+        print(
+            "Ancho medio del intervalo 95%: "
+            f"{resultados['mean_prediction_interval_width']:.4f}"
+        )
+        print(
+            "Sigma residual (train): "
+            f"{resultados['sigma_residual_train']:.4f}"
+        )
     print("-" * 50)
 
 if __name__ == "__main__":

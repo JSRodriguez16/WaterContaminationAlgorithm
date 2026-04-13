@@ -6,6 +6,7 @@ from xgboost import XGBRegressor
 
 # Asegúrate de importar la clase correcta
 from Data_Manage import Data_Manage
+from Uncertainty_Analysis import calcular_metricas_incertidumbre
 
 class XGBoost_Algorithm:
 
@@ -149,6 +150,12 @@ class XGBoost_Algorithm:
         mae  = mean_absolute_error(y_test_real, y_pred)
         rmse = float(np.sqrt(mean_squared_error(y_test_real, y_pred)))
         r2   = r2_score(y_test_real, y_pred)
+        incertidumbre = calcular_metricas_incertidumbre(
+            y_train_real=y_train_real,
+            y_pred_train=y_pred_train,
+            y_test_real=y_test_real,
+            y_pred_test=y_pred,
+        )
 
         return {
             "n_train":    len(X_train),
@@ -164,4 +171,5 @@ class XGBoost_Algorithm:
             "mae":        mae,
             "rmse":       rmse,
             "r2":         r2,
+            **incertidumbre,
         }
