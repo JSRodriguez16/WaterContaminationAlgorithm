@@ -10,10 +10,11 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "tensorflow==2.16.1",
-    "numpy",
+    "numpy>=1.23.5,<2.0",
     "pandas",
     "scikit-learn",
     "xgboost",
+    "shap==0.44.1",
     "matplotlib",
 ]
 

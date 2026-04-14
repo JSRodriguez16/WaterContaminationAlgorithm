@@ -245,11 +245,21 @@ class Data_Manage:
         return df_out.dropna(subset=[target_col]).copy()
 
     @staticmethod
+    def _es_censura_del_target(columna: str, target_col: str) -> bool:
+        sufijo = "__CENSURADO"
+        if not str(columna).endswith(sufijo):
+            return False
+
+        base_columna = str(columna)[: -len(sufijo)]
+        return Data_Manage._simplificar_texto(base_columna) == Data_Manage._simplificar_texto(target_col)
+
+    @staticmethod
     def _columnas_modelables(df_model: pd.DataFrame, target_col: str) -> list:
         return [
             c
             for c in df_model.columns
             if c not in ["NOMBRE DEL PUNTO DE MONITOREO", "FECHA", target_col]
+            and not Data_Manage._es_censura_del_target(c, target_col)
         ]
 
     @staticmethod
