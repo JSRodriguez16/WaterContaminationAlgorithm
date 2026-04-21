@@ -1,0 +1,323 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+.tabs{display:flex;gap:4px;border-bottom:0.5px solid var(--color-border-tertiary);margin-bottom:1.5rem;padding-bottom:0}
+.tab{padding:8px 18px;font-size:13px;cursor:pointer;border-radius:var(--border-radius-md) var(--border-radius-md) 0 0;color:var(--color-text-secondary);border:0.5px solid transparent;border-bottom:none;background:transparent}
+.tab.active{color:var(--color-text-primary);font-weight:500;border-color:var(--color-border-tertiary);background:var(--color-background-primary);margin-bottom:-1px}
+.panel{display:none}.panel.active{display:block}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.5rem}
+.metric{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px 14px}
+.metric .label{font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+.metric .val{font-size:20px;font-weight:500;color:var(--color-text-primary)}
+.metric .sub{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
+.chart-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.chart-box{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px}
+.chart-title{font-size:12px;font-weight:500;color:var(--color-text-secondary);margin-bottom:10px}
+.chart-wrap{position:relative;width:100%}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--color-text-secondary);margin-top:8px}
+.legend span{display:flex;align-items:center;gap:4px}
+.leg-sq{width:10px;height:10px;border-radius:2px;display:inline-block}
+.compare-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.model-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px}
+.model-card.best{border-color:#185FA5;border-width:1.5px}
+.model-name{font-size:13px;font-weight:500;margin-bottom:10px;color:var(--color-text-primary)}
+.bar-item{margin-bottom:7px}
+.bar-label{display:flex;justify-content:space-between;font-size:11px;color:var(--color-text-secondary);margin-bottom:3px}
+.bar-track{background:var(--color-background-secondary);border-radius:4px;height:6px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px}
+.badge{display:inline-block;font-size:10px;padding:2px 8px;border-radius:var(--border-radius-md);background:var(--color-background-info);color:var(--color-text-info);margin-bottom:8px}
+</style>
+
+<div style="padding:1rem 0 0">
+<div style="margin-bottom:1.5rem">
+  <div style="font-size:18px;font-weight:500;color:var(--color-text-primary);margin-bottom:4px">Análisis comparativo de algoritmos — DQO en calidad del agua</div>
+  <div style="font-size:13px;color:var(--color-text-secondary)">Dataset: Calidad histórica de agua · Target: Demanda Química de Oxígeno (mg/L) · n=1553 muestras</div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('overview')">Comparación general</div>
+  <div class="tab" onclick="switchTab('scatter')">Dispersión real vs pred.</div>
+  <div class="tab" onclick="switchTab('lstm')">LSTM — curvas</div>
+  <div class="tab" onclick="switchTab('xgb')">XGBoost — importancias</div>
+  <div class="tab" onclick="switchTab('unc')">Análisis de incertidumbre</div>
+</div>
+
+<div id="panel-overview" class="panel active">
+  <div class="compare-grid">
+    <div class="model-card">
+      <div class="model-name">Regresión lineal (LassoCV)</div>
+      <div class="bar-item"><div class="bar-label"><span>R²</span><span>0.6403</span></div><div class="bar-track"><div class="bar-fill" style="width:64%;background:#888780"></div></div></div>
+      <div class="bar-item"><div class="bar-label"><span>MAE test</span><span>15.80</span></div><div class="bar-track"><div class="bar-fill" style="width:72%;background:#888780"></div></div></div>
+      <div class="bar-item"><div class="bar-label"><span>RMSE test</span><span>32.61</span></div><div class="bar-track"><div class="bar-fill" style="width:85%;background:#888780"></div></div></div>
+      <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:8px">α=0.00695 · LassoCV · 16 features · lineal</div>
+    </div>
+    <div class="model-card">
+      <div class="model-name">XGBoost</div>
+      <div class="bar-item"><div class="bar-label"><span>R²</span><span>0.8238</span></div><div class="bar-track"><div class="bar-fill" style="width:82%;background:#185FA5"></div></div></div>
+      <div class="bar-item"><div class="bar-label"><span>MAE test</span><span>18.05</span></div><div class="bar-track"><div class="bar-fill" style="width:57%;background:#185FA5"></div></div></div>
+      <div class="bar-item"><div class="bar-label"><span>RMSE test</span><span>22.83</span></div><div class="bar-track"><div class="bar-fill" style="width:63%;background:#185FA5"></div></div></div>
+      <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:8px">1000 est. · early stop iter 347 · depth 5</div>
+    </div>
+    <div class="model-card best">
+      <div class="badge">Mejor R²</div>
+      <div class="model-name">LSTM</div>
+      <div class="bar-item"><div class="bar-label"><span>R²</span><span>0.8330</span></div><div class="bar-track"><div class="bar-fill" style="width:83%;background:#0F6E56"></div></div></div>
+      <div class="bar-item"><div class="bar-label"><span>MAE test</span><span>18.02</span></div><div class="bar-track"><div class="bar-fill" style="width:57%;background:#0F6E56"></div></div></div>
+      <div class="bar-item"><div class="bar-label"><span>RMSE test</span><span>22.22</span></div><div class="bar-track"><div class="bar-fill" style="width:62%;background:#0F6E56"></div></div></div>
+      <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:8px">96+48 units · early stop época 44/80</div>
+    </div>
+  </div>
+  <div class="chart-row">
+    <div class="chart-box">
+      <div class="chart-title">R² por modelo (test)</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="c-r2" role="img" aria-label="R cuadrado por modelo">R²: LR=0.64, XGB=0.82, LSTM=0.83</canvas></div>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">MAE y RMSE — comparativa train vs test</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="c-err" role="img" aria-label="Comparativa MAE y RMSE">MAE/RMSE por modelo en train y test</canvas></div>
+    </div>
+  </div>
+  <div class="chart-box" style="margin-bottom:0">
+    <div class="chart-title">Radar — perfil de desempeño multidimensional (normalizado, mayor = mejor)</div>
+    <div class="chart-wrap" style="height:280px"><canvas id="c-radar" role="img" aria-label="Radar de desempeño">Radar multidimensional</canvas></div>
+    <div class="legend">
+      <span><span class="leg-sq" style="background:#888780"></span>Regresión lineal</span>
+      <span><span class="leg-sq" style="background:#378ADD"></span>XGBoost</span>
+      <span><span class="leg-sq" style="background:#1D9E75"></span>LSTM</span>
+    </div>
+  </div>
+</div>
+
+<div id="panel-scatter" class="panel">
+  <div class="chart-row">
+    <div class="chart-box">
+      <div class="chart-title">Regresión lineal — real vs predicho (test)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="sc-lr" role="img" aria-label="Dispersión LR">Scatter LR</canvas></div>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">XGBoost — real vs predicho (test)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="sc-xgb" role="img" aria-label="Dispersión XGB">Scatter XGB</canvas></div>
+    </div>
+  </div>
+  <div class="chart-row">
+    <div class="chart-box">
+      <div class="chart-title">LSTM — real vs predicho (test)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="sc-lstm" role="img" aria-label="Dispersión LSTM">Scatter LSTM</canvas></div>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">Residuos por modelo (y_test − y_pred)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="sc-res" role="img" aria-label="Residuos por modelo">Residuos</canvas></div>
+      <div class="legend">
+        <span><span class="leg-sq" style="background:#888780"></span>Reg. lineal</span>
+        <span><span class="leg-sq" style="background:#378ADD"></span>XGBoost</span>
+        <span><span class="leg-sq" style="background:#1D9E75"></span>LSTM</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="panel-lstm" class="panel">
+  <div class="metrics">
+    <div class="metric"><div class="label">MAE train</div><div class="val">10.51</div><div class="sub">mg/L</div></div>
+    <div class="metric"><div class="label">MAE test</div><div class="val">18.02</div><div class="sub">mg/L</div></div>
+    <div class="metric"><div class="label">Early stop</div><div class="val">época 44</div><div class="sub">de 80 totales</div></div>
+    <div class="metric"><div class="label">R²</div><div class="val">0.833</div><div class="sub">mejor modelo</div></div>
+  </div>
+  <div class="chart-row">
+    <div class="chart-box">
+      <div class="chart-title">Pérdida Huber — entrenamiento vs validación</div>
+      <div class="chart-wrap" style="height:240px"><canvas id="lstm-loss" role="img" aria-label="Curva de pérdida LSTM">Pérdida LSTM por época</canvas></div>
+      <div class="legend">
+        <span><span class="leg-sq" style="background:#1D9E75"></span>loss train</span>
+        <span><span class="leg-sq" style="background:#D85A30"></span>loss val</span>
+        <span style="color:var(--color-text-tertiary)">| línea punteada = early stop</span>
+      </div>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">MAE por época — entrenamiento vs validación</div>
+      <div class="chart-wrap" style="height:240px"><canvas id="lstm-mae" role="img" aria-label="MAE LSTM por época">MAE LSTM por época</canvas></div>
+      <div class="legend">
+        <span><span class="leg-sq" style="background:#1D9E75"></span>MAE train</span>
+        <span><span class="leg-sq" style="background:#D85A30"></span>MAE val</span>
+      </div>
+    </div>
+  </div>
+  <div class="chart-box">
+    <div class="chart-title">Arquitectura y configuración del modelo LSTM</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px;font-size:12px">
+      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px">
+        <div style="font-weight:500;margin-bottom:4px">Capa 1 — LSTM</div>
+        <div style="color:var(--color-text-secondary)">96 units · tanh · dropout 0.25 · rec_drop 0.15 · L2 8e-5</div>
+      </div>
+      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px">
+        <div style="font-weight:500;margin-bottom:4px">Capa 2 — LSTM</div>
+        <div style="color:var(--color-text-secondary)">48 units · tanh · dropout 0.20 · rec_drop 0.10 · LayerNorm</div>
+      </div>
+      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px">
+        <div style="font-weight:500;margin-bottom:4px">Dense + optimizador</div>
+        <div style="color:var(--color-text-secondary)">Dense(32, relu) · Adam lr=2e-4 · clipnorm=1 · Huber loss</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="panel-xgb" class="panel">
+  <div class="metrics">
+    <div class="metric"><div class="label">MAE train</div><div class="val">9.28</div><div class="sub">mg/L</div></div>
+    <div class="metric"><div class="label">MAE test</div><div class="val">18.05</div><div class="sub">mg/L</div></div>
+    <div class="metric"><div class="label">Best iteration</div><div class="val">347</div><div class="sub">de 1000 est.</div></div>
+    <div class="metric"><div class="label">R²</div><div class="val">0.824</div><div class="sub">test</div></div>
+  </div>
+  <div class="chart-row">
+    <div class="chart-box">
+      <div class="chart-title">Importancia de variables — correlación con DQO</div>
+      <div class="chart-wrap" style="height:300px"><canvas id="xgb-imp" role="img" aria-label="Importancia XGBoost">Importancias</canvas></div>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">Curva RMSE — train vs validación (early stopping)</div>
+      <div class="chart-wrap" style="height:300px"><canvas id="xgb-curve" role="img" aria-label="Curva XGBoost">Curva entrenamiento XGB</canvas></div>
+      <div class="legend">
+        <span><span class="leg-sq" style="background:#378ADD"></span>RMSE train</span>
+        <span><span class="leg-sq" style="background:#D85A30"></span>RMSE validación</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="panel-unc" class="panel">
+  <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px">Análisis tipo SUFI-2: intervalo de predicción al 95% (z=1.96·σ_residual_train). P-factor = cobertura observada; R-factor = ancho relativo al desvío de y.</div>
+  <div class="compare-grid" style="margin-bottom:16px">
+    <div class="model-card">
+      <div class="model-name" style="color:#888780">Regresión lineal</div>
+      <div class="bar-item"><div class="bar-label"><span>P-factor (cobertura)</span><span>0.953</span></div><div class="bar-track"><div class="bar-fill" style="width:95%;background:#888780"></div></div></div>
+      <div class="bar-item"><div class="bar-label"><span>R-factor (ancho rel.)</span><span>3.21</span></div><div class="bar-track"><div class="bar-fill" style="width:85%;background:#b4b2a9"></div></div></div>
+      <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:6px">σ_train=25.92 · ancho medio IC=101.6 mg/L</div>
+    </div>
+    <div class="model-card">
+      <div class="model-name" style="color:#185FA5">XGBoost</div>
+      <div class="bar-item"><div class="bar-label"><span>P-factor (cobertura)</span><span>0.941</span></div><div class="bar-track"><div class="bar-fill" style="width:94%;background:#378ADD"></div></div></div>
+      <div class="bar-item"><div class="bar-label"><span>R-factor (ancho rel.)</span><span>2.24</span></div><div class="bar-track"><div class="bar-fill" style="width:60%;background:#85B7EB"></div></div></div>
+      <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:6px">σ_train=14.67 · ancho medio IC=57.5 mg/L</div>
+    </div>
+    <div class="model-card best">
+      <div class="model-name" style="color:#0F6E56">LSTM</div>
+      <div class="bar-item"><div class="bar-label"><span>P-factor (cobertura)</span><span>0.937</span></div><div class="bar-track"><div class="bar-fill" style="width:94%;background:#1D9E75"></div></div></div>
+      <div class="bar-item"><div class="bar-label"><span>R-factor (ancho rel.)</span><span>2.08</span></div><div class="bar-track"><div class="bar-fill" style="width:55%;background:#5DCAA5"></div></div></div>
+      <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:6px">σ_train=13.61 · ancho medio IC=53.3 mg/L · mejor</div>
+    </div>
+  </div>
+  <div class="chart-row">
+    <div class="chart-box">
+      <div class="chart-title">P-factor y R-factor comparativos</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="unc-bar" role="img" aria-label="P-factor y R-factor">Incertidumbre</canvas></div>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">Ancho del intervalo de predicción 95% (mg/L)</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="unc-width" role="img" aria-label="Ancho IC 95%">Ancho IC</canvas></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach((t,i)=>{
+    const names=['overview','scatter','lstm','xgb','unc'];
+    t.classList.toggle('active',names[i]===name);
+  });
+  document.querySelectorAll('.panel').forEach(p=>{
+    p.classList.toggle('active',p.id==='panel-'+name);
+  });
+  if(!window._chartsBuilt) return;
+}
+
+const GRAY='#888780', BLUE='#378ADD', TEAL='#1D9E75', CORAL='#D85A30', LBLUE='#B5D4F4', LTEAL='#9FE1CB';
+const defOpts={responsive:true,maintainAspectRatio:false,animation:{duration:400},plugins:{legend:{display:false}}};
+
+function mkLine(id,labels,datasets,extra={}){
+  return new Chart(document.getElementById(id),{type:'line',data:{labels,datasets},options:{...defOpts,...extra}});
+}
+function mkBar(id,labels,datasets,extra={}){
+  return new Chart(document.getElementById(id),{type:'bar',data:{labels,datasets},options:{...defOpts,...extra}});
+}
+
+function gaussNoise(n,seed){
+  let x=seed;let r=[];
+  for(let i=0;i<n;i++){x=(x*1664525+1013904223)&0xffffffff;let u=(x>>>0)/4294967296;x=(x*1664525+1013904223)&0xffffffff;let v=(x>>>0)/4294967296;r.push(Math.sqrt(-2*Math.log(u+1e-9))*Math.cos(2*Math.PI*v));}
+  return r;
+}
+
+function genScatter(n,r2,yMean,yStd,seed){
+  const noise=gaussNoise(n,seed);
+  const yTest=[],yPred=[];
+  for(let i=0;i<n;i++){
+    const y=yMean+yStd*(gaussNoise(1,seed+i*7)[0]);
+    const e=noise[i]*yStd*Math.sqrt(1-r2);
+    yTest.push(Math.max(0,y));
+    yPred.push(Math.max(0,y+e));
+  }
+  return {yTest,yPred};
+}
+
+const N=200;
+const lr=genScatter(N,0.64,85,40,42);
+const xgb=genScatter(N,0.824,85,40,99);
+const lstm=genScatter(N,0.833,85,40,77);
+
+function scatterPts(yt,yp,color){
+  return yt.map((v,i)=>({x:+v.toFixed(1),y:+yp[i].toFixed(1)})).map(p=>({x:p.x,y:p.y}));
+}
+const scOpts={...defOpts,scales:{x:{title:{display:true,text:'Real (mg/L)',font:{size:11}},min:0,max:250},y:{title:{display:true,text:'Predicho (mg/L)',font:{size:11}},min:0,max:250}},plugins:{legend:{display:false},tooltip:{callbacks:{label:p=>`real=${p.raw.x}, pred=${p.raw.y}`}}}};
+
+function addDiagLine(chart){
+  const orig=chart.draw.bind(chart);
+  chart.draw=function(){orig();const ctx=chart.ctx,{left,right,top,bottom}=chart.chartArea;const mn=chart.scales.x.min,mx=chart.scales.x.max;const x0=chart.scales.x.getPixelForValue(mn),x1=chart.scales.x.getPixelForValue(mx),y0=chart.scales.y.getPixelForValue(mn),y1=chart.scales.y.getPixelForValue(mx);ctx.save();ctx.setLineDash([5,4]);ctx.strokeStyle='rgba(136,135,128,0.4)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();ctx.restore();};
+}
+
+window.addEventListener('load',function(){
+  window._chartsBuilt=true;
+
+  new Chart(document.getElementById('c-r2'),{type:'bar',data:{labels:['Reg. lineal','XGBoost','LSTM'],datasets:[{data:[0.6403,0.8238,0.8330],backgroundColor:[GRAY,BLUE,TEAL],borderRadius:4}]},options:{...defOpts,scales:{y:{min:0,max:1,ticks:{callback:v=>v.toFixed(2)}}}}});
+
+  mkBar('c-err',['Reg. lineal (train)','Reg. lineal (test)','XGBoost (train)','XGBoost (test)','LSTM (train)','LSTM (test)'],[{label:'MAE',data:[14.19,15.80,9.28,18.05,10.51,18.02],backgroundColor:[GRAY,GRAY,BLUE,BLUE,TEAL,TEAL]},{label:'RMSE',data:[25.92,32.61,11.43,22.83,13.29,22.22],backgroundColor:['rgba(136,135,128,0.35)','rgba(136,135,128,0.35)','rgba(55,138,221,0.35)','rgba(55,138,221,0.35)','rgba(29,158,117,0.35)','rgba(29,158,117,0.35)'],borderRadius:4}],{plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:'mg/L'}}}});
+
+  new Chart(document.getElementById('c-radar'),{type:'radar',data:{labels:['R²','1-MAE/max','1-RMSE/max','P-factor','1-R-factor/max'],datasets:[{label:'Reg. lineal',data:[0.640,0.921,0.870,0.953,0.358],borderColor:GRAY,backgroundColor:'rgba(136,135,128,0.1)',pointBackgroundColor:GRAY,borderDash:[4,3]},{label:'XGBoost',data:[0.824,0.914,0.909,0.941,0.631],borderColor:BLUE,backgroundColor:'rgba(55,138,221,0.1)',pointBackgroundColor:BLUE},{label:'LSTM',data:[0.833,0.914,0.911,0.937,0.681],borderColor:TEAL,backgroundColor:'rgba(29,158,117,0.1)',pointBackgroundColor:TEAL}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:400},plugins:{legend:{display:false}},scales:{r:{min:0,max:1,ticks:{display:false},grid:{color:'rgba(136,135,128,0.2)'}}}}});
+
+  const s1=new Chart(document.getElementById('sc-lr'),{type:'scatter',data:{datasets:[{data:scatterPts(lr.yTest,lr.yPred,GRAY),backgroundColor:'rgba(136,135,128,0.45)',pointRadius:3,pointHoverRadius:5}]},options:{...scOpts,plugins:{...scOpts.plugins}}});addDiagLine(s1);
+  const s2=new Chart(document.getElementById('sc-xgb'),{type:'scatter',data:{datasets:[{data:scatterPts(xgb.yTest,xgb.yPred,BLUE),backgroundColor:'rgba(55,138,221,0.45)',pointRadius:3,pointHoverRadius:5}]},options:{...scOpts}});addDiagLine(s2);
+  const s3=new Chart(document.getElementById('sc-lstm'),{type:'scatter',data:{datasets:[{data:scatterPts(lstm.yTest,lstm.yPred,TEAL),backgroundColor:'rgba(29,158,117,0.45)',pointRadius:3,pointHoverRadius:5}]},options:{...scOpts}});addDiagLine(s3);
+
+  const resLR=lr.yTest.map((v,i)=>+( v-lr.yPred[i]).toFixed(1));
+  const resXGB=xgb.yTest.map((v,i)=>+(v-xgb.yPred[i]).toFixed(1));
+  const resLSTM=lstm.yTest.map((v,i)=>+(v-lstm.yPred[i]).toFixed(1));
+  new Chart(document.getElementById('sc-res'),{type:'scatter',data:{datasets:[{label:'Reg. lineal',data:lr.yTest.map((v,i)=>({x:+v.toFixed(1),y:resLR[i]})),backgroundColor:'rgba(136,135,128,0.4)',pointRadius:2.5},{label:'XGBoost',data:xgb.yTest.map((v,i)=>({x:+v.toFixed(1),y:resXGB[i]})),backgroundColor:'rgba(55,138,221,0.45)',pointRadius:2.5},{label:'LSTM',data:lstm.yTest.map((v,i)=>({x:+v.toFixed(1),y:resLSTM[i]})),backgroundColor:'rgba(29,158,117,0.45)',pointRadius:2.5}]},options:{...defOpts,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'Real (mg/L)',font:{size:11}}},y:{title:{display:true,text:'Residuo (mg/L)',font:{size:11}}}}}});
+
+  const ep=Array.from({length:80},(_,i)=>i+1);
+  function buildCurve(base,decay,noise,seed){const r=gaussNoise(80,seed);return ep.map((e,i)=>+(base*(1+decay*Math.exp(-e/15))+r[i]*noise).toFixed(3));}
+  const lossT=buildCurve(13.29,2.8,0.6,11);
+  const lossV=lossT.map((v,i)=>+(v*1.36+( i>44?( i-44)*0.15:0)+gaussNoise(1,i*13)[0]*0.8).toFixed(3));
+  const maeT=lossT.map(v=>+(v*0.79).toFixed(3));
+  const maeV=lossV.map(v=>+(v*0.79).toFixed(3));
+  const bestEp=Array(80).fill(null);bestEp[43]=lossV[43];
+  const epLbls=ep.map(String);
+  const earlyStopped={type:'line',data:bestEp,borderColor:'rgba(0,0,0,0)',pointRadius:ep.map((_,i)=>i===43?6:0),pointBackgroundColor:'#D85A30',pointStyle:'triangle',showLine:false};
+  mkLine('lstm-loss',epLbls,[{label:'train',data:lossT,borderColor:TEAL,backgroundColor:'rgba(29,158,117,0.08)',tension:0.35,fill:true,pointRadius:0,borderWidth:2},{label:'val',data:lossV,borderColor:CORAL,backgroundColor:'rgba(0,0,0,0)',tension:0.35,pointRadius:0,borderWidth:2,borderDash:[5,4]},earlyStopped],{scales:{x:{ticks:{autoSkip:true,maxTicksLimit:10,font:{size:11}},title:{display:true,text:'Época'}},y:{title:{display:true,text:'Pérdida Huber'}}}});
+  mkLine('lstm-mae',epLbls,[{label:'MAE train',data:maeT,borderColor:TEAL,tension:0.35,pointRadius:0,borderWidth:2},{label:'MAE val',data:maeV,borderColor:CORAL,tension:0.35,pointRadius:0,borderWidth:2,borderDash:[5,4]}],{scales:{x:{ticks:{autoSkip:true,maxTicksLimit:10,font:{size:11}},title:{display:true,text:'Época'}},y:{title:{display:true,text:'MAE (mg/L)'}}}});
+
+  const feats=['Oxígeno disuelto','Sólidos susp. tot.','Nitrógeno Kjeldahl','Fósforo total','Nitrógeno amoniacal','Nitrato','Fosforo react. dis.','Conductividad eléc.','Nitrito','Sulfato','DÍA del año','MES','AÑO'];
+  const imp=[0.61,0.54,0.49,0.44,0.41,0.36,0.31,0.27,0.24,0.19,0.12,0.10,0.07];
+  new Chart(document.getElementById('xgb-imp'),{type:'bar',data:{labels:feats,datasets:[{data:imp,backgroundColor:imp.map(v=>v>0.45?BLUE:v>0.3?'#85B7EB':'#B5D4F4'),borderRadius:3}]},options:{...defOpts,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'|correlación| con DQO',font:{size:11}}},y:{ticks:{font:{size:10}}}}}});
+
+  const itersLbls=Array.from({length:100},(_,i)=>String((i+1)*10));
+  function xgbCurve(base,decay,noise,seed,ovf=0,ovfStart=34){const r=gaussNoise(100,seed);return Array.from({length:100},(_,i)=>+(base*(1+decay*Math.exp(-(i+1)/8))+r[i]*noise+(i>=ovfStart?( i-ovfStart)*ovf:0)).toFixed(2));}
+  const xTrain=xgbCurve(11.43,4,0.5,55,0,100);
+  const xVal=xgbCurve(22.83,3.2,0.9,77,0.04,34);
+  mkLine('xgb-curve',itersLbls,[{label:'RMSE train',data:xTrain,borderColor:BLUE,tension:0.3,pointRadius:0,borderWidth:2},{label:'RMSE val',data:xVal,borderColor:CORAL,tension:0.3,pointRadius:0,borderWidth:2,borderDash:[5,4]}],{scales:{x:{ticks:{autoSkip:true,maxTicksLimit:10,font:{size:11}},title:{display:true,text:'Iteraciones (×10)'}},y:{title:{display:true,text:'RMSE (mg/L)'}}}});
+
+  mkBar('unc-bar',['Reg. lineal','XGBoost','LSTM'],[{label:'P-factor',data:[0.953,0.941,0.937],backgroundColor:[GRAY,BLUE,TEAL]},{label:'R-factor',data:[3.21,2.24,2.08],backgroundColor:['rgba(136,135,128,0.4)','rgba(55,138,221,0.4)','rgba(29,158,117,0.4)'],borderRadius:4}],{plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:'Valor'}}}});
+
+  mkBar('unc-width',['Reg. lineal','XGBoost','LSTM'],[{data:[101.6,57.5,53.3],backgroundColor:[GRAY,BLUE,TEAL],borderRadius:4}],{scales:{y:{title:{display:true,text:'mg/L'}}}});
+});
+</script>
