@@ -1,6 +1,7 @@
 from LSTM_Algorithm import LSTM_Algorithm
 from LinearRegression_Algorithm import LinearRegression_Algorithm
 from XGBoost_Algorithm import XGBoost_Algorithm
+from SVM_Algorithm import SVM_Algorithm
 
 
 def mostrar_resultados(nombre_modelo: str, resultados: dict) -> None:
@@ -25,6 +26,21 @@ def mostrar_resultados(nombre_modelo: str, resultados: dict) -> None:
         print("Importancia global SHAP (top variables):")
         for item in resultados["shap_feature_importance"][:10]:
             print(f"  - {item['feature']}: {item['importance']:.6f}")
+    # Diagnóstico específico de SVM
+    if resultados.get("svm_mejores_hiperparametros"):
+        print("-" * 50)
+        print("Diagnóstico SVM")
+        print("-" * 50)
+        print(f"  Kernel: {resultados.get('svm_kernel', 'rbf')}")
+        print(f"  Mejores hiperparámetros: {resultados['svm_mejores_hiperparametros']}")
+        if resultados.get("svm_mejor_rmse_cv") is not None:
+            print(f"  Mejor RMSE CV (búsqueda): {resultados['svm_mejor_rmse_cv']:.4f}")
+        if resultados.get("svm_n_support_vectors") is not None:
+            print(f"  Vectores de soporte: {resultados['svm_n_support_vectors']}")
+    if resultados.get("svm_importancia_variables"):
+        print("  Importancia por permutación (top variables):")
+        for item in resultados["svm_importancia_variables"][:10]:
+            print(f"    - {item['feature']}: {item['importance']:.6f}")
     if "p_factor" in resultados and "r_factor" in resultados:
         print("-" * 50)
         print("Análisis de Incertidumbre")
@@ -54,6 +70,13 @@ if __name__ == "__main__":
     xgb = XGBoost_Algorithm(archivo_datos, variable_objetivo)
     resultados_xgb = xgb.ejecutar()
     mostrar_resultados("XGBoost", resultados_xgb)
+
+    print("\nIniciando entrenamiento de Regresión Lineal...")
     regresion_lineal = LinearRegression_Algorithm(archivo_datos, variable_objetivo)
     resultados = regresion_lineal.ejecutar()
     mostrar_resultados("Regresion lineal", resultados)
+
+    print("\nIniciando entrenamiento de SVM...")
+    svm = SVM_Algorithm(archivo_datos, variable_objetivo)
+    resultados_svm = svm.ejecutar()
+    mostrar_resultados("SVM", resultados_svm)
