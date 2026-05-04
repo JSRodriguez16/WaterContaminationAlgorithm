@@ -8,14 +8,6 @@ def calcular_metricas_incertidumbre(
     y_pred_test: np.ndarray,
     z_score: float = 1.96,
 ) -> dict:
-    """Calcula metricas de incertidumbre tipo SUFI-2 para un modelo determinista.
-
-    Aproximacion usada:
-    - Se estima la dispersion del error con los residuos de entrenamiento.
-    - Se construye un intervalo de prediccion alrededor de y_pred_test.
-    - P-factor: cobertura observada dentro del intervalo.
-    - R-factor: ancho medio del intervalo normalizado por la desviacion de y observado.
-    """
     y_train_real = np.asarray(y_train_real).reshape(-1)
     y_pred_train = np.asarray(y_pred_train).reshape(-1)
     y_test_real = np.asarray(y_test_real).reshape(-1)

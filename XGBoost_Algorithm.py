@@ -7,10 +7,9 @@ import matplotlib.pyplot as plt
 
 try:
     import shap
-except ImportError:  # pragma: no cover - dependencia opcional en tiempo de ejecución
+except ImportError:
     shap = None
 
-# Asegúrate de importar la clase correcta
 from Data_Manage import Data_Manage
 from Uncertainty_Analysis import calcular_metricas_incertidumbre
 
@@ -139,9 +138,7 @@ class XGBoost_Algorithm:
 
     def _generar_importancia_shap(self, X_train, feature_cols, max_muestras=200, max_features=15):
         if shap is None:
-            raise RuntimeError(
-                "La dependencia 'shap' no está instalada. Instálala para generar el gráfico de importancia."
-            )
+            return {"plot_path": None, "plot_mode": "none", "feature_importance": []}
 
         if X_train is None or len(X_train) == 0 or not feature_cols:
             return {"plot_path": None, "feature_importance": []}

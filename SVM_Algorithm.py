@@ -1,23 +1,6 @@
-"""
-SVM_Algorithm.py
-----------------
-Implementación de Máquina de Vectores de Soporte (SVR) para la predicción
-de la Demanda Química de Oxígeno (DQO) en estaciones de monitoreo de Colombia.
-
-El modelo utiliza Support Vector Regression (SVR) con kernel RBF, combinado con
-búsqueda de hiperparámetros mediante RandomizedSearchCV para optimizar C, epsilon
-y gamma. Sigue exactamente las mismas convenciones de preprocesamiento, escalado,
-partición y reporte de métricas que los demás modelos del proyecto
-(LinearRegression_Algorithm, XGBoost_Algorithm, LSTM_Algorithm).
-
-Referencia metodológica:
-    Koli et al. (2025). "A Hybrid Approach to Water Quality Classification
-    Using SVM and Xgboost Method." IJRSI, vol. XII, n.º VI, pp. 1083-1086.
-    doi: 10.51244/IJRSI.2025.12060080
-"""
-
 import unicodedata
 from pathlib import Path
+import time
 
 import numpy as np
 from scipy.stats import loguniform, uniform
@@ -30,36 +13,13 @@ from Uncertainty_Analysis import calcular_metricas_incertidumbre
 
 
 class SVM_Algorithm:
-    """
-    Modelo SVR con kernel RBF para predicción de DQO.
-
-    Parámetros
-    ----------
-    archivo_csv : str
-        Ruta al CSV histórico de calidad de agua.
-    target : str
-        Nombre de la variable objetivo (p. ej. "DEMANDA QUIMICA DE OXIGENO").
-    train_ratio : float
-        Proporción de datos destinada a entrenamiento (default 0.8).
-    buscar_hiperparametros : bool
-        Si True ejecuta RandomizedSearchCV; si False usa los valores por defecto
-        ajustados manualmente. Útil para reproducibilidad rápida.
-    n_iter_busqueda : int
-        Número de combinaciones evaluadas por RandomizedSearchCV.
-    cv_folds : int
-        Número de pliegues de validación cruzada durante la búsqueda.
-    random_state : int
-        Semilla para reproducibilidad.
-    """
-
-    # Hiperparámetros por defecto encontrados empíricamente para datos de DQO.
     _DEFAULTS = {
         "C": 10.0,
         "epsilon": 0.1,
         "gamma": "scale",
         "kernel": "rbf",
         "cache_size": 500,
-        "max_iter": 5000,
+        "max_iter": -1,
     }
 
     def __init__(
@@ -84,14 +44,9 @@ class SVM_Algorithm:
         self.preprocesador: Data_Manage | None = None
         self.feature_cols: list[str] = []
 
-        # Información de diagnóstico guardada tras el entrenamiento.
         self._mejores_hiperparametros: dict = {}
         self._mejor_score_cv: float | None = None
         self._ruta_csv_resuelta: str | None = None
-
-    # ------------------------------------------------------------------
-    # Utilidades de resolución de rutas (mismo patrón que XGBoost/Lineal)
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _normalizar_texto(texto: str) -> str:
@@ -134,15 +89,7 @@ class SVM_Algorithm:
             "Verifica nombre/ruta (por ejemplo, acentos como historica vs histórica)."
         )
 
-    # ------------------------------------------------------------------
-    # Preparación de datos
-    # ------------------------------------------------------------------
-
     def _preparar_datos(self) -> tuple:
-        """
-        Carga y preprocesa los datos usando Data_Manage en modo tabular,
-        con la misma configuración que XGBoost (split aleatorio + log-transform).
-        """
         archivo_resuelto = self._resolver_archivo()
         self._ruta_csv_resuelta = archivo_resuelto
 
@@ -162,23 +109,10 @@ class SVM_Algorithm:
 
         return X_train, X_test, y_train, y_test
 
-    # ------------------------------------------------------------------
-    # Construcción y entrenamiento
-    # ------------------------------------------------------------------
-
     def _construir_modelo_base(self) -> SVR:
-        """Construye SVR con hiperparámetros por defecto."""
         return SVR(**self._DEFAULTS)
 
     def _buscar_hiperparametros(self, X_train: np.ndarray, y_train: np.ndarray) -> SVR:
-        """
-        Realiza búsqueda aleatoria de hiperparámetros sobre un subconjunto
-        de entrenamiento para mantener tiempos razonables.
-
-        SVR tiene complejidad O(n²) a O(n³) en el número de muestras, por lo
-        que se limita la búsqueda a un subconjunto representativo cuando el
-        dataset es grande (>3000 filas).
-        """
         MAX_MUESTRAS_BUSQUEDA = 3000
         rng = np.random.default_rng(self.random_state)
 
@@ -191,15 +125,16 @@ class SVM_Algorithm:
             y_bus = y_train
 
         espacio = {
-            "C":       loguniform(1e-1, 1e3),   # [0.1, 100]
+            "C":       loguniform(1e-1, 1e2),   # reduce upper bound to avoid ill-conditioning
             "epsilon": loguniform(1e-3, 1.0),   # [0.001, 1]
-            "gamma":   ["scale", "auto"] + list(loguniform(1e-4, 1.0).rvs(8, random_state=self.random_state)),
+            "gamma":   ["scale", "auto"] + list(loguniform(1e-4, 1.0).rvs(4, random_state=self.random_state)),
         }
 
         svr_base = SVR(
             kernel="rbf",
             cache_size=500,
-            max_iter=5000,
+            max_iter=20000,
+            tol=1e-2,
         )
 
         busqueda = RandomizedSearchCV(
@@ -209,27 +144,29 @@ class SVM_Algorithm:
             scoring="neg_root_mean_squared_error",
             cv=self.cv_folds,
             random_state=self.random_state,
-            n_jobs=-1,
+            n_jobs=1,
             refit=True,
-            verbose=0,
+            verbose=1,
         )
+        print(f"[SVM] Buscando hiperparametros ({self.n_iter_busqueda} iteraciones x {self.cv_folds} folds)...")
         busqueda.fit(X_bus, y_bus)
 
         self._mejores_hiperparametros = busqueda.best_params_
-        self._mejor_score_cv = float(-busqueda.best_score_)  # RMSE positivo
-
+        self._mejor_score_cv = float(-busqueda.best_score_)  
         return busqueda.best_estimator_
 
     def _entrenar(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
         """Entrena el modelo SVR con o sin búsqueda de hiperparámetros."""
         if self.buscar_hiperparametros:
             self.model = self._buscar_hiperparametros(X_train, y_train)
-            # Re-ajusta sobre el conjunto completo de entrenamiento con los
-            # mejores hiperparámetros encontrados en el subconjunto de búsqueda.
+            print("  [SVM] Entrenando modelo final con mejores hiperparametros...")
             self.model.fit(X_train, y_train)
+            print("  [SVM] Modelo final entrenado.")
         else:
             self.model = self._construir_modelo_base()
+            print("  [SVM] Entrenando modelo SVR con parametros por defecto...")
             self.model.fit(X_train, y_train)
+            print("  [SVM] Modelo entrenado.")
             self._mejores_hiperparametros = self._DEFAULTS.copy()
 
     def _predecir(self, X: np.ndarray) -> np.ndarray:
@@ -239,10 +176,6 @@ class SVM_Algorithm:
             )
         return self.model.predict(X)
 
-    # ------------------------------------------------------------------
-    # Importancia de variables mediante permutación
-    # ------------------------------------------------------------------
-
     def _calcular_importancia_permutacion(
         self,
         X_test: np.ndarray,
@@ -250,36 +183,17 @@ class SVM_Algorithm:
         max_features: int = 15,
         n_repeticiones: int = 5,
     ) -> list[dict]:
-        """
-        Calcula la importancia de variables mediante permutación (model-agnostic).
-
-        A diferencia de SHAP/TreeExplainer, este método es compatible con
-        cualquier estimador, incluido SVR. Mide cuánto aumenta el MAE al
-        permutar aleatoriamente cada variable, manteniendo el resto fijo.
-
-        Parámetros
-        ----------
-        X_test : np.ndarray
-            Conjunto de prueba escalado.
-        y_test : np.ndarray
-            Valores reales escalados del objetivo.
-        max_features : int
-            Número máximo de variables a reportar (las más importantes).
-        n_repeticiones : int
-            Número de permutaciones por variable (promediado para estabilidad).
-
-        Retorna
-        -------
-        list[dict] con {"feature", "importance"} ordenado descendentemente.
-        """
         if self.model is None or not self.feature_cols:
             return []
 
         rng = np.random.default_rng(self.random_state)
         mae_base = float(mean_absolute_error(y_test, self._predecir(X_test)))
 
+        print("[SVM] Calculando importancia por permutacion...")
         importancias = []
         for i in range(X_test.shape[1]):
+            if (i + 1) % 5 == 0 or i == 0 or i + 1 == X_test.shape[1]:
+                print(f"  [SVM] Variables evaluadas: {i + 1}/{X_test.shape[1]}")
             deltas = []
             for _ in range(n_repeticiones):
                 X_perm = X_test.copy()
@@ -301,25 +215,16 @@ class SVM_Algorithm:
             if importancias[idx] > 0  # Solo variables con impacto positivo
         ]
 
-    # ------------------------------------------------------------------
-    # Ejecución principal
-    # ------------------------------------------------------------------
-
     def ejecutar(self) -> dict:
-        """
-        Ejecuta el pipeline completo: preprocesamiento → entrenamiento →
-        evaluación → análisis de incertidumbre → importancia de variables.
-
-        Retorna
-        -------
-        dict con las mismas claves que XGBoost_Algorithm y
-        LinearRegression_Algorithm para facilitar la comparación en
-        Diagnosis_Algorithms.py.
-        """
+        print("[SVM] Preparando datos...")
+        inicio = time.time()
         X_train, X_test, y_train, y_test = self._preparar_datos()
+        tiempo_prep = time.time() - inicio
+        print(f"  [SVM] Datos preparados en {tiempo_prep:.2f}s ({len(X_train)} train, {len(X_test)} test)")
 
         self._entrenar(X_train, y_train)
 
+        print("[SVM] Generando predicciones y calculando metricas finales...")
         y_pred_train_scaled = self._predecir(X_train)
         y_pred_scaled = self._predecir(X_test)
 
@@ -348,6 +253,7 @@ class SVM_Algorithm:
         )
 
         importancia = self._calcular_importancia_permutacion(X_test, y_test)
+        print("[SVM] Proceso SVM finalizado.")
 
         return {
             # Tamaños de partición
@@ -362,13 +268,10 @@ class SVM_Algorithm:
             "mae":    mae,
             "rmse":   rmse,
             "r2":     r2,
-            # Diagnóstico del modelo SVM
             "svm_kernel":              "rbf",
             "svm_mejores_hiperparametros": self._mejores_hiperparametros,
             "svm_mejor_rmse_cv":       self._mejor_score_cv,
             "svm_n_support_vectors":   int(self.model.support_vectors_.shape[0]) if self.model else None,
-            # Importancia de variables por permutación
             "svm_importancia_variables": importancia,
-            # Análisis de incertidumbre (igual que demás modelos)
             **incertidumbre,
         }
